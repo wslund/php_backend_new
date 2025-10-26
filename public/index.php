@@ -1,13 +1,13 @@
 <?php
 declare(strict_types=1);
 
-// 1) Autoload MÅSTE vara först
+// Autoload
 require __DIR__ . '/../vendor/autoload.php';
 
-// 2) Ladda CORS (hanterar OPTIONS)
+// CORS
 require __DIR__ . '/../src/cors.php';
 
-// 3) (valfritt lokalt) .env — på Render används Environment istället
+// (valfritt) .env lokalt
 if (is_file(__DIR__ . '/../.env')) {
     Dotenv\Dotenv::createImmutable(__DIR__ . '/..')->load();
 }
@@ -24,7 +24,7 @@ try {
         echo json_encode([
             'name' => 'php-backend',
             'status' => 'ok',
-            'endpoints' => ['/health', '/auth/login', '/auth/me']
+            'endpoints' => ['/health', '/auth/login', '/auth/me', '/debug/db', '/debug/user?u=admin', '/debug/fix-admin (POST)']
         ]);
         exit;
     }
@@ -35,41 +35,26 @@ try {
         exit;
     }
 
-    // ===== DEBUG ENDPOINTS (TA BORT NÄR KLART) =====
-
-    // Autoload-check
-    if ($uri === '/debug/autoload' && $method === 'GET') {
-        $ok = class_exists(\App\Database::class);
-        echo json_encode([
-            'autoload_present' => file_exists(__DIR__ . '/../vendor/autoload.php'),
-            'class_exists_App\\Database' => $ok
-        ]);
-        exit;
-    }
-
-    // DB-check
+    // ===== DEBUG: DB =====
     if ($uri === '/debug/db' && $method === 'GET') {
         $pdo = \App\Database::pdo();
         $db  = $pdo->query('SELECT current_database()')->fetchColumn();
         $cnt = $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-        echo json_encode(['db' => $db, 'users_count' => (int)$cnt]);
+        echo json_encode(['db'=>$db, 'users_count'=>(int)$cnt]);
         exit;
     }
 
-    // Användar-check
+    // ===== DEBUG: USER =====
     if ($uri === '/debug/user' && $method === 'GET') {
         $u = isset($_GET['u']) ? (string)$_GET['u'] : '';
         $pdo = \App\Database::pdo();
         $st = $pdo->prepare('SELECT id, username, password_hash FROM users WHERE LOWER(username)=LOWER(:u) LIMIT 1');
-        $st->execute(['u' => $u]);
+        $st->execute(['u'=>$u]);
         $user = $st->fetch(\PDO::FETCH_ASSOC);
 
-        if (!$user) {
-            echo json_encode(['found' => false, 'query' => $u]);
-            exit;
-        }
-        $stored = (string)$user['password_hash'];
+        if (!$user) { echo json_encode(['found'=>false, 'query'=>$u]); exit; }
 
+        $stored = (string)$user['password_hash'];
         echo json_encode([
             'found' => true,
             'username' => $user['username'],
@@ -81,9 +66,41 @@ try {
         exit;
     }
 
-    // ===== AUTH =====
+    // ===== DEBUG: FIX ADMIN (POST) — sätter bcrypt-hash för 'admin123' =====
+    if ($uri === '/debug/fix-admin' && $method === 'POST') {
+        $pdo = \App\Database::pdo();
 
-    // POST /auth/login
+        // trim username
+        $pdo->exec("UPDATE users SET username = TRIM(username)");
+
+        // skapa admin om saknas
+        $pdo->exec("INSERT INTO users (username, password_hash)
+                    VALUES ('admin', 'placeholder')
+                    ON CONFLICT (username) DO NOTHING");
+
+        // skapa NY bcrypt-hash i PHP
+        $new = password_hash('admin123', PASSWORD_DEFAULT);
+
+        $up = $pdo->prepare('UPDATE users SET password_hash = :h WHERE LOWER(username) = LOWER(:u)');
+        $up->execute(['h'=>$new, 'u'=>'admin']);
+
+        // läs tillbaka & verifiera
+        $st = $pdo->prepare('SELECT id, username, password_hash FROM users WHERE LOWER(username)=LOWER(:u) LIMIT 1');
+        $st->execute(['u'=>'admin']);
+        $user = $st->fetch(\PDO::FETCH_ASSOC);
+        $ok = $user ? password_verify('admin123', (string)$user['password_hash']) : false;
+
+        echo json_encode([
+            'updated' => true,
+            'username' => $user['username'] ?? null,
+            'hash_prefix' => isset($user['password_hash']) ? substr($user['password_hash'], 0, 10) : null,
+            'hash_length' => isset($user['password_hash']) ? strlen($user['password_hash']) : null,
+            'password_verify_admin123' => $ok
+        ]);
+        exit;
+    }
+
+    // ===== AUTH: LOGIN =====
     if ($uri === '/auth/login' && $method === 'POST') {
         $pdo = \App\Database::pdo();
 
@@ -109,14 +126,11 @@ try {
         $ok = false;
         if ($user) {
             $stored = (string)$user['password_hash'];
-            if (str_starts_with($stored, '$2')) {
-                // bcrypt
+            if (str_starts_with($stored, '$2')) {            // bcrypt
                 $ok = password_verify($password, $stored);
-            } else {
-                // TILLFÄLLIG fallback för ev. klartext i DB
+            } else {                                         // legacy klartext fallback (tillfälligt)
                 $ok = hash_equals($stored, $password);
                 if ($ok) {
-                    // MIGRERA direkt till bcrypt
                     $new = password_hash($password, PASSWORD_DEFAULT);
                     $up = $pdo->prepare('UPDATE users SET password_hash = :h WHERE id = :id');
                     $up->execute(['h' => $new, 'id' => $user['id']]);
@@ -139,7 +153,7 @@ try {
         exit;
     }
 
-    // GET /auth/me
+    // ===== AUTH: ME =====
     if ($uri === '/auth/me' && $method === 'GET') {
         $jwt = \App\Auth::bearerToken();
         if (!$jwt) {
