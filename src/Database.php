@@ -5,39 +5,29 @@ namespace App;
 
 use PDO;
 
-final class Database
-{
+final class Database {
   private static ?PDO $pdo = null;
 
-  public static function pdo(): PDO
-  {
-    if (self::$pdo instanceof PDO) return self::$pdo;
+  public static function pdo(): PDO {
+    if (self::$pdo) return self::$pdo;
 
-    $url = getenv('DATABASE_URL'); // Render Postgres External Database URL
-    if (!$url) {
-      throw new \RuntimeException('DATABASE_URL not set');
-    }
+    $url = getenv('DATABASE_URL');
+    if (!$url) throw new \RuntimeException('DATABASE_URL not set');
 
-    // postgres://user:pass@host:port/dbname
     $parts = parse_url($url);
-    if (!$parts || !isset($parts['host'])) {
-      throw new \RuntimeException('Invalid DATABASE_URL');
-    }
+    if (!$parts || !isset($parts['host'])) throw new \RuntimeException('Invalid DATABASE_URL');
 
-    $host = $parts['host'];
-    $port = (int)($parts['port'] ?? 5432);
+    $dsn  = sprintf('pgsql:host=%s;port=%d;dbname=%s',
+      $parts['host'], (int)($parts['port'] ?? 5432), ltrim($parts['path'] ?? '', '/')
+    );
     $user = urldecode($parts['user'] ?? '');
     $pass = urldecode($parts['pass'] ?? '');
-    $db   = ltrim($parts['path'] ?? '', '/');
 
-    $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $db);
-    $options = [
-      PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    self::$pdo = new PDO($dsn, $user, $pass, [
+      PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-      PDO::ATTR_EMULATE_PREPARES   => false,
-    ];
-
-    self::$pdo = new PDO($dsn, $user, $pass, $options);
+      PDO::ATTR_EMULATE_PREPARES => false,
+    ]);
     return self::$pdo;
   }
 }
