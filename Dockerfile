@@ -1,16 +1,28 @@
-FROM php:8.3-apache
+# Apache + PHP 8.2
+FROM php:8.2-apache
 
-# Installera dependencies om behövs (t.ex. för MySQL)
-RUN docker-php-ext-install mysqli pdo pdo_mysql
+# Installera Postgres PDO och aktivera mod_rewrite
+RUN apt-get update \
+  && apt-get install -y libpq-dev unzip git \
+  && docker-php-ext-install pdo pdo_pgsql \
+  && a2enmod rewrite
 
-# Kopiera app-filer
-COPY . /var/www/html/
+# Sätt DocumentRoot till /var/www/html/public
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf
 
-# Sätt rätt permissions
-RUN chown -R www-data:www-data /var/www/html
+# Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Exponera port 80
+# Kopiera appen
+WORKDIR /var/www/html
+COPY . .
+
+# Installera beroenden (ingen dev)
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+# Apache lyssnar på 80; Render mappar själv port
 EXPOSE 80
 
-# Starta Apache
+# Klar – apache foreground
 CMD ["apache2-foreground"]
