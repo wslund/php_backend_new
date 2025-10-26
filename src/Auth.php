@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
-
 namespace App;
-
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
@@ -24,8 +22,7 @@ final class Auth {
   }
 
   public static function bearerToken(): ?string {
-    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (preg_match('/Bearer\s+(.+)/i', $hdr, $m)) return trim($m[1]);
-    return null;
+    $h = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    return preg_match('/Bearer\s+(.+)/i', $h, $m) ? trim($m[1]) : null;
   }
 }

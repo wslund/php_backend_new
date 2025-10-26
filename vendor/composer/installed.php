@@ -3,7 +3,7 @@
         'name' => 'wslund/php-backend',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'd038b6b82617e3f8c641f317fa7fa7ae703341c3',
+        'reference' => 'c4b7515d9e825eebc36b1643c77118e3b3cfd881',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -76,7 +76,7 @@
         'wslund/php-backend' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'd038b6b82617e3f8c641f317fa7fa7ae703341c3',
+            'reference' => 'c4b7515d9e825eebc36b1643c77118e3b3cfd881',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

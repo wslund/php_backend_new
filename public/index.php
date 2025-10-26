@@ -2,7 +2,6 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
-
 use App\Database;
 use App\Auth;
 
@@ -32,9 +31,10 @@ try {
   // POST /auth/login
   if ($uri === '/auth/login' && $method === 'POST') {
     $pdo = Database::pdo();
-    $input = json_decode(file_get_contents('php://input') ?: '[]', true);
-    $username = trim((string)($input['username'] ?? ''));
-    $password = (string)($input['password'] ?? '');
+
+    $in = json_decode(file_get_contents('php://input') ?: '[]', true);
+    $username = trim((string)($in['username'] ?? ''));
+    $password = (string)($in['password'] ?? '');
 
     if ($username === '' || $password === '') {
       http_response_code(400);
@@ -42,9 +42,9 @@ try {
       exit;
     }
 
-    $stmt = $pdo->prepare('SELECT id, username, password_hash FROM users WHERE username = :u LIMIT 1');
-    $stmt->execute(['u' => $username]);
-    $user = $stmt->fetch();
+    $st = $pdo->prepare('SELECT id, username, password_hash FROM users WHERE username = :u LIMIT 1');
+    $st->execute(['u'=>$username]);
+    $user = $st->fetch();
 
     if (!$user || !password_verify($password, $user['password_hash'])) {
       http_response_code(401);
@@ -57,16 +57,12 @@ try {
     exit;
   }
 
-  // GET /auth/me (exempel skyddad)
+  // GET /auth/me (skyddad)
   if ($uri === '/auth/me' && $method === 'GET') {
     $jwt = Auth::bearerToken();
     if (!$jwt) { http_response_code(401); echo json_encode(['error'=>'missing bearer token']); exit; }
-    try {
-      $claims = Auth::verifyToken($jwt);
-      echo json_encode(['ok'=>true,'claims'=>$claims]);
-    } catch (\Throwable $e) {
-      http_response_code(401); echo json_encode(['error'=>'invalid token']);
-    }
+    try { $claims = Auth::verifyToken($jwt); echo json_encode(['ok'=>true,'claims'=>$claims]); }
+    catch (\Throwable $e) { http_response_code(401); echo json_encode(['error'=>'invalid token']); }
     exit;
   }
 
