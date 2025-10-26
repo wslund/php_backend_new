@@ -13,11 +13,11 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Installera PHP-deps först (bättre cache, och ren vendor/)
+# Installera PHP-deps först (ren vendor i containern)
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress
 
-# Kopiera applikationskoden (OBS: public/ innehåller din .htaccess)
+# Kopiera appkoden
 COPY public ./public
 COPY src ./src
 
